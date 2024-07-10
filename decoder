@@ -1,0 +1,2 @@
+#!/bin/bash
+node -r ts-node/register "$(dirname "$0")/decoder.ts" "$@"
