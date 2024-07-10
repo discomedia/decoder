@@ -112,6 +112,22 @@ Ensure your analysis is thorough, accurate, and clear, targeted to someone who m
   }
 }
 
+// New function to create the archive folder if it doesn't exist
+async function ensureArchiveFolder(): Promise<void> {
+  const archivePath = path.join(process.cwd(), 'archive');
+  try {
+    await fs.access(archivePath);
+  } catch (error) {
+    await fs.mkdir(archivePath);
+  }
+}
+
+// New function to get the actual folder name
+function getActualFolderName(directory: string): string {
+  const resolvedPath = path.resolve(directory);
+  return path.basename(resolvedPath);
+}
+
 async function main() {
   program
     .argument('[directory]', 'Project directory to analyze')
@@ -122,15 +138,21 @@ async function main() {
       }
 
       try {
+        // Ensure the archive folder exists
+        await ensureArchiveFolder();
+
         console.log('Analyzing project structure...');
         const projectContent = await analyzeDirectory(directory);
 
-        // Save content to a file
+        // Get the actual folder name
+        const folderName = getActualFolderName(directory);
+
+        // Save content to a file in the archive folder
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const folderName = path.basename(directory);
         const contentFileName = `content-${folderName}-${timestamp}.txt`;
-        await fs.writeFile(contentFileName, projectContent);
-        console.log(`Project content saved to ${contentFileName}`);
+        const contentFilePath = path.join('archive', contentFileName);
+        await fs.writeFile(contentFilePath, projectContent);
+        console.log(`Project content saved to ${contentFilePath}`);
 
         console.log('Generating project description...');
         const description = await generateDescription(projectContent);
@@ -138,10 +160,11 @@ async function main() {
         console.log('Project Description:');
         console.log(description);
 
-        // Save description to a file
-        const outputFile = path.join(directory, 'project_description.md');
-        await fs.writeFile(outputFile, description);
-        console.log(`Description saved to ${outputFile}`);
+        // Save description to a file in the archive folder
+        const outputFileName = `${folderName}-decoder-description-${timestamp}.md`;
+        const outputFilePath = path.join('archive', outputFileName);
+        await fs.writeFile(outputFilePath, description);
+        console.log(`Description saved to ${outputFilePath}`);
       } catch (error) {
         console.error('An error occurred:', error);
       }
