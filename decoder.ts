@@ -65,27 +65,35 @@ async function analyzeDirectory(dir: string): Promise<string> {
 }
 
 async function generateDescription(projectContent: string): Promise<string> {
-  const prompt = `You will be analyzing a folder of files. Each file contains code or other information. You will be creating an application overview describing the entire application.
+  const prompt = `You will be analyzing a document containing the contents of a folder of files. Each file contains code or other information. 
+  
+  You will be creating an application overview describing the entire application.
 
 Here is the project structure and files being analysed:
 <code>
 ${projectContent}
 </code>
 
-Based on that document, create a comprehensive project overview, including
+Based on that document, create a comprehensive project overview, with output in the following format.
 
+<output>
 1. Overall purpose and functionality. What does the application do? What are its inputs and outputs?
 2. Application architecture, including language, database, and other components
 3. Folder and file structure tree, with a one-line description of the purpose and contents of each file.
-4. Description of contents of each file. For each file include a description of functions and objects in each file, summarising
-- Name
-- Purpose (what it does in the overall application)
-- How it works
+4. Description of contents of each file, including a general overview of the purpose of the file, and a summary of each function and object.
+5. For each function and object in every file, write a detailed description, including:
+- Name of the function or object
 - Inputs and outputs
-5. Usage an instructions for the application
-6. Potential weaknesses, risks, and areas for improvement.
+- Purpose (what it does in the overall application)
+- How the function/object works
+6. Usage instructions for the application
+7. A brief summary of potential weaknesses, risks, and areas for improvement.
+</output>
 
-Ensure your analysis is thorough, accurate, and clear, targeted to someone who may not be familiar with code or application development.`;
+Ensure your analysis is thorough, accurate, and clear, targeted to someone who may not be familiar with code or application development.
+
+Respond with only the project overview in the format above.
+`;
 
   const response = await anthropic.messages.create({
     model: AIModel,
