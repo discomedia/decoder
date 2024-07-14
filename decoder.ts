@@ -64,60 +64,87 @@ async function analyzeDirectory(dir: string): Promise<string> {
   return content;
 }
 
-async function generateDescription(projectContent: string): Promise<string> {
-  const prompt = `You will be analyzing a document containing the contents of a folder of files. Each file contains code or other information. 
-  
-  You will be creating an application overview describing the entire application.
+async function generateDetailedDescription(projectContent: string): Promise<string> {
+  const sections = [
+    {
+      title: "1. Overall Purpose and Functionality",
+      prompt: "Provide a detailed explanation of what the application does, its main features, and its inputs and outputs. Discuss the problem it solves and its target users."
+    },
+    {
+      title: "2. Application Architecture",
+      prompt: "Describe in detail the application's architecture, including languages used, databases, APIs, and other components. Explain how these components interact and any notable design patterns or architectural decisions."
+    },
+    {
+      title: "3. Folder and File Structure",
+      prompt: "Create a comprehensive folder and file structure tree. For each file, provide a detailed description of its purpose and contents, including any key classes, functions, or data structures it contains."
+    },
+    {
+      title: "4. Detailed File Analysis",
+      prompt: "For each file in the project, provide an in-depth analysis including:\n" +
+              "- The file's overall purpose and how it fits into the larger application\n" +
+              "- A detailed description of each function, class, and significant code block\n" +
+              "- Explanations of algorithms, data structures, and design patterns used\n" +
+              "- Any notable optimizations or performance considerations"
+    },
+    {
+      title: "5. Function and Object Deep Dive",
+      prompt: "For each function and object in every file, provide an extensive breakdown including:\n" +
+              "- Name and signature\n" +
+              "- Detailed description of inputs, outputs, and side effects\n" +
+              "- Comprehensive explanation of the function/object's purpose and how it contributes to the overall application\n" +
+              "- Step-by-step explanation of how the function/object works\n" +
+              "- Any edge cases, error handling, or special considerations\n" +
+              "- Potential optimizations or alternative implementations"
+    },
+    {
+      title: "6. Usage Instructions",
+      prompt: "Provide detailed instructions on how to set up, configure, and use the application. Include any necessary environment setup, dependencies, build processes, and runtime instructions."
+    },
+    {
+      title: "7. Weaknesses, Risks, and Improvements",
+      prompt: "Conduct a thorough analysis of potential weaknesses, security risks, and areas for improvement in the application. Suggest specific enhancements, optimizations, or architectural changes that could benefit the project."
+    }
+  ];
 
-Here is the project structure and files being analysed:
+  let fullDescription = '';
+
+  for (const section of sections) {
+    console.log(`Generating section: ${section.title}`);
+    const prompt = `Analyze the following project content and ${section.prompt}
+
+Here is the project structure and files:
 <code>
 ${projectContent}
 </code>
 
-Based on that document, create a comprehensive project overview, with output in the following format.
+Provide a detailed and comprehensive response for this section. Do not summarize or omit details.`;
 
-<output>
-1. Overall purpose and functionality. What does the application do? What are its inputs and outputs?
-2. Application architecture, including language, database, and other components
-3. Folder and file structure tree, with a one-line description of the purpose and contents of each file.
-4. Description of contents of each file, including a general overview of the purpose of the file, and a summary of each function and object.
-5. For each function and object in every file, write a detailed description, including:
-- Name of the function or object
-- Inputs and outputs
-- Purpose (what it does in the overall application)
-- How the function/object works
-6. Usage instructions for the application
-7. A brief summary of potential weaknesses, risks, and areas for improvement.
-</output>
+    const response = await anthropic.messages.create({
+      model: AIModel,
+      max_tokens: maxTokens,
+      temperature: 0,
+      system: "You are a senior software architect with extensive experience in code analysis, documentation, and technical communication. Your task is to provide an in-depth, detailed analysis of software projects, explaining them thoroughly for other senior developers and architects.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: prompt
+            }
+          ]
+        }
+      ]
+    });
 
-Ensure your analysis is thorough, accurate, and clear, targeted to someone who may not be familiar with code or application development.
-
-Respond with only the project overview in the format above.
-`;
-
-  const response = await anthropic.messages.create({
-    model: AIModel,
-    max_tokens: maxTokens,
-    temperature: 0,
-    system: "You are a software engineering manager, experienced in both coding, documentation, and communication. You are an expert in understanding software projects and code and explaining them in human terms for other software engineering managers and executive teams.",
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: prompt
-          }
-        ]
-      }
-    ]
-  });
-
-  if (response.content[0].type === 'text') {
-    return response.content[0].text;
-  } else {
-    throw new Error('Unexpected response format');
+    if (response.content[0].type === 'text') {
+      fullDescription += `${section.title}\n\n${response.content[0].text}\n\n`;
+    } else {
+      throw new Error('Unexpected response format');
+    }
   }
+
+  return fullDescription;
 }
 
 // New function to create the archive folder if it doesn't exist
@@ -146,33 +173,28 @@ async function main() {
       }
 
       try {
-        // Ensure the archive folder exists
         await ensureArchiveFolder();
 
         console.log('Analyzing project structure...');
         const projectContent = await analyzeDirectory(directory);
 
-        // Get the actual folder name
         const folderName = getActualFolderName(directory);
 
-        // Save content to a file in the archive folder
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const contentFileName = `content-${folderName}-${timestamp}.txt`;
+        const contentFileName = `content-${folderName}-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
         const contentFilePath = path.join('archive', contentFileName);
         await fs.writeFile(contentFilePath, projectContent);
         console.log(`Project content saved to ${contentFilePath}`);
 
-        console.log('Generating project description...');
-        const description = await generateDescription(projectContent);
+        console.log('Generating detailed project description...');
+        const description = await generateDetailedDescription(projectContent);
 
-        console.log('Project Description:');
+        console.log('Detailed Project Description:');
         console.log(description);
 
-        // Save description to a file in the archive folder
-        const outputFileName = `${folderName}-decoder-description-${timestamp}.md`;
+        const outputFileName = `${folderName}-detailed-description-${new Date().toISOString().replace(/[:.]/g, '-')}.md`;
         const outputFilePath = path.join('archive', outputFileName);
         await fs.writeFile(outputFilePath, description);
-        console.log(`Description saved to ${outputFilePath}`);
+        console.log(`Detailed description saved to ${outputFilePath}`);
       } catch (error) {
         console.error('An error occurred:', error);
       }
