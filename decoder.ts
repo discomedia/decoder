@@ -24,7 +24,7 @@ async function shouldIncludeFile(filePath: string): Promise<boolean> {
     '.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.md', '.txt', '.csv'
   ];
   const excludedFiles = ['.gitignore', 'package-lock.json', 'yarn.lock'];
-  const excludedDirs = ['.git', 'node_modules', 'dist', 'build', 'target', 'out', 'bin'];
+  const excludedDirs = ['.git', 'node_modules', 'dist', 'build', 'target', 'out', 'bin', 'Pods', 'Images'];
 
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath);
