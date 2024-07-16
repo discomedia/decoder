@@ -3,7 +3,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
-import { Anthropic } from "@anthropic-ai/sdk";
+import { Anthropic, APIError } from "@anthropic-ai/sdk";
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -17,6 +17,24 @@ const anthropic = new Anthropic({
 
 const program = new Command();
 
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const sections = [
+  { title: "Project Overview", prompt: "provide a high-level overview of the project, its purpose, and main features." },
+  { title: "Architecture and Design", prompt: "describe the overall architecture and design patterns used in the project." },
+  { title: "Key Components", prompt: "Summarise, identify and explain the key objects, functions, and modules of the project." },
+  { title: "Functions and Methods", prompt: "list and explain the main functions and methods of the project, explaining inputs, outputs, and algoritms." },
+  { title: "Dependencies and External Libraries", prompt: "list and explain the main dependencies and external libraries used." }
+];
+
+/*{ title: "Potential Improvements", prompt: "suggest potential improvements or areas for refactoring." },
+{ title: "Deployment and DevOps", prompt: "describe any deployment or DevOps-related configurations or scripts." },
+{ title: "Documentation and Comments", prompt: "evaluate the quality and completeness of documentation and code comments." },
+{ title: "Testing Strategy", prompt: "describe the testing strategy and coverage, if applicable." },
+   { title: "Code Quality and Best Practices", prompt: "evaluate the code quality and adherence to best practices." },
+{ title: "Security Considerations", prompt: "identify any security considerations or potential vulnerabilities." }
+*/
+
 // New function to check if a file should be included
 async function shouldIncludeFile(filePath: string): Promise<boolean> {
   const includedExtensions = [
@@ -24,7 +42,7 @@ async function shouldIncludeFile(filePath: string): Promise<boolean> {
     '.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.md', '.txt', '.csv'
   ];
   const excludedFiles = ['.gitignore', 'package-lock.json', 'yarn.lock'];
-  const excludedDirs = ['.git', 'node_modules', 'dist', 'build', 'target', 'out', 'bin', 'Pods', 'Images'];
+  const excludedDirs = ['.git', '.expo', 'node_modules', 'dist', 'build', 'target', 'out', 'bin', 'Pods', 'Images.xcassets', 'generated', 'util','graphql'];
 
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath);
@@ -65,51 +83,26 @@ async function analyzeDirectory(dir: string): Promise<string> {
 }
 
 async function generateDetailedDescription(projectContent: string): Promise<string> {
-  const sections = [
-    {
-      title: "1. Overall Purpose and Functionality",
-      prompt: "Provide a detailed explanation of what the application does, its main features, and its inputs and outputs. Discuss the problem it solves and its target users."
-    },
-    {
-      title: "2. Application Architecture",
-      prompt: "Describe in detail the application's architecture, including languages used, databases, APIs, and other components. Explain how these components interact and any notable design patterns or architectural decisions."
-    },
-    {
-      title: "3. Folder and File Structure",
-      prompt: "Create a comprehensive folder and file structure tree. For each file, provide a detailed description of its purpose and contents, including any key classes, functions, or data structures it contains."
-    },
-    {
-      title: "4. Detailed File Analysis",
-      prompt: "For each file in the project, provide an in-depth analysis including:\n" +
-              "- The file's overall purpose and how it fits into the larger application\n" +
-              "- A detailed description of each function, class, and significant code block\n" +
-              "- Explanations of algorithms, data structures, and design patterns used\n" +
-              "- Any notable optimizations or performance considerations"
-    },
-    {
-      title: "5. Function and Object Deep Dive",
-      prompt: "For each function and object in every file, provide an extensive breakdown including:\n" +
-              "- Name and signature\n" +
-              "- Detailed description of inputs, outputs, and side effects\n" +
-              "- Comprehensive explanation of the function/object's purpose and how it contributes to the overall application\n" +
-              "- Step-by-step explanation of how the function/object works\n" +
-              "- Any edge cases, error handling, or special considerations\n" +
-              "- Potential optimizations or alternative implementations"
-    },
-    {
-      title: "6. Usage Instructions",
-      prompt: "Provide detailed instructions on how to set up, configure, and use the application. Include any necessary environment setup, dependencies, build processes, and runtime instructions."
-    },
-    {
-      title: "7. Weaknesses, Risks, and Improvements",
-      prompt: "Conduct a thorough analysis of potential weaknesses, security risks, and areas for improvement in the application. Suggest specific enhancements, optimizations, or architectural changes that could benefit the project."
-    }
-  ];
-
   let fullDescription = '';
+  let remainingTokens = 40000; // Initialize with the max tokens per minute
+  let resetTime = new Date().getTime() + 60000; // Initialize with current time + 1 minute
 
   for (const section of sections) {
     console.log(`Generating section: ${section.title}`);
+    
+    // Check if we need to wait
+    const now = new Date().getTime();
+    if (remainingTokens <= 0 || now >= resetTime) {
+      const waitTime = Math.max(resetTime - now, 0);
+      console.log(`Waiting ${Math.ceil(waitTime / 1000)} seconds for rate limit reset...`);
+      for (let i = Math.ceil(waitTime / 1000); i > 0; i--) {
+        process.stdout.write(`\rWaiting ${i} seconds...`);
+        await wait(1000);
+      }
+      process.stdout.write('\n');
+      remainingTokens = 40000; // Reset to max tokens after waiting
+    }
+
     const prompt = `Analyze the following project content and ${section.prompt}
 
 Here is the project structure and files:
@@ -119,33 +112,56 @@ ${projectContent}
 
 Provide a detailed and comprehensive response for this section. Do not summarize or omit details.`;
 
-    const response = await anthropic.messages.create({
-      model: AIModel,
-      max_tokens: maxTokens,
-      temperature: 0,
-      system: "You are a senior software architect with extensive experience in code analysis, documentation, and technical communication. Your task is to provide an in-depth, detailed analysis of software projects, explaining them thoroughly for other senior developers and architects.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: prompt
-            }
-          ]
-        }
-      ]
-    });
+    try {
+      const response = await anthropic.messages.create({
+        model: AIModel,
+        max_tokens: maxTokens,
+        temperature: 0,
+        system: "You are a senior software architect with extensive experience in code analysis, documentation, and technical communication. Your task is to provide an in-depth, detailed analysis of software projects, explaining them thoroughly for other senior developers and architects.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: prompt
+              }
+            ]
+          }
+        ]
+      });
 
-    if (response.content[0].type === 'text') {
-      fullDescription += `${section.title}\n\n${response.content[0].text}\n\n`;
-    } else {
-      throw new Error('Unexpected response format');
+      if (response.content[0].type === 'text') {
+        fullDescription += `${section.title}\n\n${response.content[0].text}\n\n`;
+        
+        // Update remaining tokens based on usage information
+        if (response.usage) {
+          remainingTokens -= response.usage.output_tokens;
+        }
+
+        // Note: We don't have access to the rate limit reset time from the response
+        // You might need to implement a separate mechanism to track this
+      } else {
+        throw new Error('Unexpected response format');
+      }
+    } catch (error) {
+      if (error instanceof APIError) {
+        console.error('API Error:', error.message);
+        if (error.status === 429) {
+          console.log('Rate limit exceeded. Adjusting wait time...');
+          remainingTokens = 0;
+          // You might want to implement a backoff strategy here
+          resetTime = new Date(Date.now() + 60000).getTime(); // Wait for 1 minute as a simple backoff
+        }
+      } else {
+        console.error('An unexpected error occurred:', error);
+      }
     }
   }
 
   return fullDescription;
 }
+
 
 // New function to create the archive folder if it doesn't exist
 async function ensureArchiveFolder(): Promise<void> {
