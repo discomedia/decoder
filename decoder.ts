@@ -28,14 +28,6 @@ const sections = [
   { title: "Dependencies and External Libraries", prompt: "list and explain the main dependencies and external libraries used." }
 ];
 
-/*{ title: "Potential Improvements", prompt: "suggest potential improvements or areas for refactoring." },
-{ title: "Deployment and DevOps", prompt: "describe any deployment or DevOps-related configurations or scripts." },
-{ title: "Documentation and Comments", prompt: "evaluate the quality and completeness of documentation and code comments." },
-{ title: "Testing Strategy", prompt: "describe the testing strategy and coverage, if applicable." },
-   { title: "Code Quality and Best Practices", prompt: "evaluate the code quality and adherence to best practices." },
-{ title: "Security Considerations", prompt: "identify any security considerations or potential vulnerabilities." }
-*/
-
 // New function to check if a file should be included
 async function shouldIncludeFile(filePath: string): Promise<boolean> {
   const includedExtensions = [
@@ -240,9 +232,10 @@ async function main() {
         console.log(fileTree);
 
         // Prompt the user to continue or abort
-        const userResponse = await promptUser("Do you want to continue with analysis, or abort? (Press Enter to continue, type 'abort' to abort): ");
-        if (userResponse.trim().toLowerCase() === 'abort') {
-          console.log('Analysis aborted by user.');
+        const userResponse = await promptUser("Do you want to continue with analysis? [Default enter to continue]: ");
+        let shortResponse = userResponse.trim().toLowerCase();
+        if (shortResponse === 'no' || shortResponse === 'n') {
+          console.log('Aborted.');
           return;
         }
 
