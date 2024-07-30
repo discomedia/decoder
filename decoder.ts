@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Command } from 'commander';
 import { Anthropic, APIError } from "@anthropic-ai/sdk";
 import dotenv from 'dotenv';
+import readline from 'readline';
 
 dotenv.config();
 
@@ -38,23 +39,35 @@ const sections = [
 // New function to check if a file should be included
 async function shouldIncludeFile(filePath: string): Promise<boolean> {
   const includedExtensions = [
-    '.js', '.ts', '.jsx', '.tsx', '.vue', '.py', '.rb', '.php', '.go', '.java', '.cs', '.cpp', '.h',
+    '.js', '.mjs', '.ts', '.jsx', '.tsx', '.vue', '.py', '.rb', '.php', '.go', '.java', '.cs', '.cpp', '.h',
     '.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.md', '.txt', '.csv'
   ];
-  const excludedFiles = ['.gitignore', 'package-lock.json', 'yarn.lock'];
-  const excludedDirs = ['.git', '.expo', 'node_modules', 'dist', 'build', 'target', 'out', 'bin', 'Pods', 'Images.xcassets', 'generated', 'util','graphql'];
+  const excludedFiles = ['.gitignore', 'package-lock.json', 'yarn.lock', 'DS_Store'];
+  const excludedDirs = ['.git', '.expo', 'node_modules', 'dist', 'build', 'target', 'out', 'bin', 'Pods', 'Images.xcassets', 'generated', 'util', 'graphql', 'test_data', 'archive', 'input', 'output', 'test', 'ignore'];
 
   const ext = path.extname(filePath);
   const baseName = path.basename(filePath);
   const dirName = path.dirname(filePath);
 
   // Check if the file is in an excluded directory
-  if (excludedDirs.some(dir => dirName.includes(dir))) {
+  const pathSegments = filePath.split(path.sep);
+  if (pathSegments.some(segment => excludedDirs.includes(segment))) {
     return false;
   }
 
   // Check if the file is explicitly excluded
-  if (excludedFiles.includes(baseName) || baseName === '.DS_Store') {
+  if (excludedFiles.includes(baseName)) {
+    return false;
+  }
+
+  // Check if it's a directory
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats.isDirectory()) {
+      return !excludedDirs.includes(baseName);
+    }
+  } catch (error) {
+    console.error(`Error checking file stats for ${filePath}:`, error);
     return false;
   }
 
@@ -62,24 +75,31 @@ async function shouldIncludeFile(filePath: string): Promise<boolean> {
   return includedExtensions.includes(ext);
 }
 
+
 // Updated analyzeDirectory function
-async function analyzeDirectory(dir: string): Promise<string> {
+async function analyzeDirectory(dir: string): Promise<{ content: string, fileTree: string }> {
   let content = '';
+  let fileTree = '';
   const entries = await fs.readdir(dir, { withFileTypes: true });
 
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
 
-    if (entry.isDirectory()) {
-      content += await analyzeDirectory(fullPath);
-    } else if (entry.isFile() && await shouldIncludeFile(fullPath)) {
-      content += `File: ${fullPath}\n`;
-      const fileContent = await fs.readFile(fullPath, 'utf-8');
-      content += `Content:\n${fileContent}\n\n`;
+    if (await shouldIncludeFile(fullPath)) {
+      if (entry.isDirectory()) {
+        const result = await analyzeDirectory(fullPath);
+        content += result.content;
+        fileTree += `Directory: ${fullPath}\n${result.fileTree}`;
+      } else if (entry.isFile()) {
+        content += `File: ${fullPath}\n`;
+        fileTree += `File: ${fullPath}\n`;
+        const fileContent = await fs.readFile(fullPath, 'utf-8');
+        content += `Content:\n${fileContent}\n\n`;
+      }
     }
   }
 
-  return content;
+  return { content, fileTree };
 }
 
 async function generateDetailedDescription(projectContent: string): Promise<string> {
@@ -162,7 +182,6 @@ Provide a detailed and comprehensive response for this section. Do not summarize
   return fullDescription;
 }
 
-
 // New function to create the archive folder if it doesn't exist
 async function ensureArchiveFolder(): Promise<void> {
   const archivePath = path.join(process.cwd(), 'archive');
@@ -179,6 +198,21 @@ function getActualFolderName(directory: string): string {
   return path.basename(resolvedPath);
 }
 
+// New function to prompt the user for input
+async function promptUser(question: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
 async function main() {
   program
     .argument('[directory]', 'Project directory to analyze')
@@ -192,17 +226,28 @@ async function main() {
         await ensureArchiveFolder();
 
         console.log('Analyzing project structure...');
-        const projectContent = await analyzeDirectory(directory);
+        const { content, fileTree } = await analyzeDirectory(directory);
 
         const folderName = getActualFolderName(directory);
 
         const contentFileName = `content-${folderName}-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
         const contentFilePath = path.join('archive', contentFileName);
-        await fs.writeFile(contentFilePath, projectContent);
+        await fs.writeFile(contentFilePath, content);
         console.log(`Project content saved to ${contentFilePath}`);
 
+        // Display the file tree
+        console.log('File Tree:');
+        console.log(fileTree);
+
+        // Prompt the user to continue or abort
+        const userResponse = await promptUser("Do you want to continue with analysis, or abort? (Press Enter to continue, type 'abort' to abort): ");
+        if (userResponse.trim().toLowerCase() === 'abort') {
+          console.log('Analysis aborted by user.');
+          return;
+        }
+
         console.log('Generating detailed project description...');
-        const description = await generateDetailedDescription(projectContent);
+        const description = await generateDetailedDescription(content);
 
         console.log('Detailed Project Description:');
         console.log(description);
