@@ -6,6 +6,8 @@ An AI-powered project analysis tool that analyses files on the local directory a
 
 Decoder is a command-line application designed to analyze and describe software projects. It generates comprehensive overviews of project directories, including structure, file contents, and overall architecture.
 
+See more about it on my blog [here](https://hooshmand.net/decoder-script-summarise-application/).
+
 ## Features
 
 - Analyzes project directories recursively
