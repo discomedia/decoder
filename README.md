@@ -4,6 +4,8 @@
 
 Decoder package is a powerful command-line tool designed to analyze and document software projects. It uses AI-powered analysis to generate comprehensive project descriptions, including architecture overviews, key components, and detailed explanations of functions and dependencies. This tool is perfect for developers and architects who need to quickly understand or document complex codebases.
 
+See more about it on my blog [here](https://hooshmand.net/decoder-script-summarise-application/).
+
 ## Order of Operation
 
 1. Parses command-line arguments to get the project directory
