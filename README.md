@@ -1,91 +1,61 @@
-# Decoder
+# decoder
 
-An AI-powered project analysis tool that analyses files on the local directory and creates a project summary.
+## Description
 
-## Overview
+Decoder package is a powerful command-line tool designed to analyze and document software projects. It uses AI-powered analysis to generate comprehensive project descriptions, including architecture overviews, key components, and detailed explanations of functions and dependencies. This tool is perfect for developers and architects who need to quickly understand or document complex codebases.
 
-Decoder is a command-line application designed to analyze and describe software projects. It generates comprehensive overviews of project directories, including structure, file contents, and overall architecture.
+## Order of Operation
 
-## Features
+1. Parses command-line arguments to get the project directory
+2. Analyzes the project structure, reading files and creating a content summary
+3. Generates a file tree of the project
+4. Prompts the user to continue with the analysis
+5. Uses AI to generate detailed descriptions of various aspects of the project
+6. Saves the generated content and descriptions to files in an 'archive' folder
 
-- Analyzes project directories recursively
-- Generates a raw content file of analyzed project files
-- Produces a detailed Markdown description of the project
-- Utilizes AI for intelligent project analysis
+## Parameters
 
-## Installation
+### Input parameters
+- `directory`: (optional) The path to the project directory to analyze. If not provided, the script will display usage instructions.
 
-1. Ensure you have Node.js installed
-2. Clone this repository:
-   ```
-   git clone https://github.com/yourusername/decoder.git
-   ```
-3. Navigate to the project directory:
-   ```
-   cd decoder
-   ```
-4. Install dependencies:
-   ```
-   npm install
-   ```
-5. Create a `.env` file in the root directory and add your Anthropic API key:
-   ```
-   ANTHROPIC_API_KEY=your_api_key_here
-   ```
+### Output
+The script generates two main outputs:
+1. A content file containing the raw project structure and file contents
+2. A detailed project description file in Markdown format
 
-## Usage
+Both files are saved in an 'archive' folder with timestamps in their names.
 
-1. Build the project:
-   ```
-   npm run build
-   ```
-2. Run Decoder:
-   ```
-   ./dist/decoder.js [path-to-project-directory]
-   ```
+## Usage 
 
-## Output
+To use the Decoder tool, install it globally via npm:
 
-Decoder generates two files:
-
-1. `content-[foldername]-[timestamp].txt`: Raw content of analyzed project files
-2. `project_description.md`: Detailed project description (created in the analyzed project directory)
-
-## Project Structure
-
-```
-decoder/
-├── decoder.ts       # Main application logic
-├── decoder.js       # Compiled JavaScript version
-├── package.json     # Project metadata and dependencies
-└── tsconfig.json    # TypeScript configuration
+```bash
+npm install -g decoder
 ```
 
-## Dependencies
+Then run it from the command line:
 
-- @anthropic-ai/sdk: AI-powered project analysis
-- commander: Command-line argument parsing
-- dotenv: Environment variable loading
-- TypeScript (dev dependency)
+```bash
+decoder /path/to/your/project
+```
 
-## Contributing
+The tool will analyze the project and generate detailed documentation.
 
-Contributions are welcome! Please feel free to submit a pull request.
+## Test parameters
 
-## Future Improvements
+Here are some sample parameters for testing:
 
-- Enhance error handling
-- Implement configurable file inclusion/exclusion rules
-- Improve scalability for large projects
-- Add unit tests
-- Implement rate limiting for API calls
-- Add progress indication for large projects
-- Enhance output formatting
+1. Analyze the current directory:
+   ```
+   decoder .
+   ```
 
-## License
+2. Analyze a specific project:
+   ```
+   decoder /path/to/your/project
+   ```
 
-[MIT License](LICENSE)
-
-## Contact
-
-For any questions or feedback, please open an issue on this repository.
+3. Display usage instructions:
+   ```
+   decoder
+   ```

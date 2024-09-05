@@ -24,6 +24,7 @@ const sections = [
   { title: "Project Overview", prompt: "provide a high-level overview of the project, its purpose, and main features." },
   { title: "Architecture and Design", prompt: "describe the overall architecture and design patterns used in the project." },
   { title: "Key Components", prompt: "Summarise, identify and explain the key objects, functions, and modules of the project." },
+  { title: "Flow", prompt: "Describe the flow of the project, including inputs, outputs, and order of execution of operations." },
   { title: "Functions and Methods", prompt: "list and explain the main functions and methods of the project, explaining inputs, outputs, and algoritms." },
   { title: "Dependencies and External Libraries", prompt: "list and explain the main dependencies and external libraries used." }
 ];
@@ -95,83 +96,88 @@ async function analyzeDirectory(dir: string): Promise<{ content: string, fileTre
 }
 
 async function generateDetailedDescription(projectContent: string): Promise<string> {
-  let fullDescription = '';
   let remainingTokens = 40000; // Initialize with the max tokens per minute
   let resetTime = new Date().getTime() + 60000; // Initialize with current time + 1 minute
 
-  for (const section of sections) {
+  const sectionPromises = sections.map(async (section) => {
     console.log(`Generating section: ${section.title}`);
-    
-    // Check if we need to wait
-    const now = new Date().getTime();
-    if (remainingTokens <= 0 || now >= resetTime) {
-      const waitTime = Math.max(resetTime - now, 0);
-      console.log(`Waiting ${Math.ceil(waitTime / 1000)} seconds for rate limit reset...`);
-      for (let i = Math.ceil(waitTime / 1000); i > 0; i--) {
-        process.stdout.write(`\rWaiting ${i} seconds...`);
-        await wait(1000);
+
+    while (true) {
+      // Check if we need to wait
+      const now = new Date().getTime();
+      if (remainingTokens <= 0 || now >= resetTime) {
+        const waitTime = Math.max(resetTime - now, 0);
+        console.log(`Waiting ${Math.ceil(waitTime / 1000)} seconds for rate limit reset...`);
+        await wait(waitTime);
+        remainingTokens = 40000; // Reset to max tokens after waiting
+        resetTime = new Date().getTime() + 60000;
       }
-      process.stdout.write('\n');
-      remainingTokens = 40000; // Reset to max tokens after waiting
-    }
 
-    const prompt = `Analyze the following project content and ${section.prompt}
+      const prompt = `
+        Analyze the following project content and ${section.prompt}
 
-Here is the project structure and files:
-<code>
-${projectContent}
-</code>
+        Here is the project structure and files:
+        <code>
+        ${projectContent}
+        </code>
 
-Provide a detailed and comprehensive response for this section. Do not summarize or omit details.`;
+        Provide a detailed and comprehensive response for this section. Do not summarize or omit details.
+      `;
 
-    try {
-      const response = await anthropic.messages.create({
-        model: AIModel,
-        max_tokens: maxTokens,
-        temperature: 0,
-        system: "You are a senior software architect with extensive experience in code analysis, documentation, and technical communication. Your task is to provide an in-depth, detailed analysis of software projects, explaining them thoroughly for other senior developers and architects.",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: prompt
-              }
-            ]
+      try {
+        const response = await anthropic.messages.create({
+          model: AIModel,
+          max_tokens: maxTokens,
+          temperature: 0,
+          system: "You are a senior software architect with extensive experience in code analysis, documentation, and technical communication. Your task is to provide an in-depth, detailed analysis of software projects, explaining them thoroughly for other senior developers and architects.",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: prompt
+                }
+              ]
+            }
+          ]
+        });
+
+        if (response.content[0].type === 'text') {
+          // Update remaining tokens based on usage information
+          if (response.usage) {
+            remainingTokens -= response.usage.output_tokens;
           }
-        ]
-      });
 
-      if (response.content[0].type === 'text') {
-        fullDescription += `${section.title}\n\n${response.content[0].text}\n\n`;
-        
-        // Update remaining tokens based on usage information
-        if (response.usage) {
-          remainingTokens -= response.usage.output_tokens;
+          return { title: section.title, content: response.content[0].text };
+        } else {
+          throw new Error('Unexpected response format');
         }
-
-        // Note: We don't have access to the rate limit reset time from the response
-        // You might need to implement a separate mechanism to track this
-      } else {
-        throw new Error('Unexpected response format');
-      }
-    } catch (error) {
-      if (error instanceof APIError) {
-        console.error('API Error:', error.message);
-        if (error.status === 429) {
-          console.log('Rate limit exceeded. Adjusting wait time...');
-          remainingTokens = 0;
-          // You might want to implement a backoff strategy here
-          resetTime = new Date(Date.now() + 60000).getTime(); // Wait for 1 minute as a simple backoff
+      } catch (error) {
+        if (error instanceof APIError) {
+          console.error('API Error:', error.message);
+          if (error.status === 429) {
+            console.log('Rate limit exceeded. Retrying...');
+            remainingTokens = 0;
+            resetTime = new Date(Date.now() + 60000).getTime(); // Wait for 1 minute as a simple backoff
+            continue; // Retry the current section
+          }
         }
-      } else {
-        console.error('An unexpected error occurred:', error);
+        throw error; // Rethrow other errors
       }
     }
-  }
+  });
 
-  return fullDescription;
+  try {
+    const sectionResults = await Promise.all(sectionPromises);
+    const sectionMap = new Map(sectionResults.map(result => [result.title, result.content]));
+
+    // Assemble the final description in the correct order
+    return sections.map(section => `${section.title}\n\n${sectionMap.get(section.title)}\n\n`).join('');
+  } catch (error) {
+    console.error('An error occurred while generating the detailed description:', error);
+    throw error;
+  }
 }
 
 // New function to create the archive folder if it doesn't exist
